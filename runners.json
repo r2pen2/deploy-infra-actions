@@ -21,6 +21,11 @@
       "repo": "r2pen2/nutrifit",
       "name": "glados-nutrifit",
       "dir": "actions-runner-nutrifit"
+    },
+    {
+      "repo": "r2pen2/fit",
+      "name": "glados-fit",
+      "dir": "actions-runner-fit"
     }
   ]
 }
