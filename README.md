@@ -104,6 +104,32 @@ Example (monorepo with custom build still OK):
 Self-hosted runner labels: `self-hosted`, `glados`  
 (register **per consumer repo** — GitHub runners are repo-scoped).
 
+### Registering runners from this repo
+
+Canonical list: [`runners.json`](./runners.json).
+
+| Trigger | Behavior |
+|---------|----------|
+| PR that changes `runners.json` | Registers **newly added** repos on glados |
+| Push to `main` touching the list | Same (added repos only) |
+| Actions → **Register glados runners** | Sync `all` or a comma-separated repo list |
+
+Workflow: [`.github/workflows/register-runners.yml`](./.github/workflows/register-runners.yml)
+
+**Bootstrap (once):** this repo needs its own glados runner before the workflow can run:
+
+```bash
+# on glados, with gh authed as a user that can admin the repo
+export RUNNER_ADMIN_PAT=ghp_...   # or gh auth login
+node scripts/runners/register.mjs --from-list runners.json --only r2pen2/deploy-infra-actions
+sudo ~/actions-runner-deploy-infra/svc.sh install   # if not already a service
+sudo ~/actions-runner-deploy-infra/svc.sh start
+```
+
+Secret on this repo: `RUNNER_ADMIN_PAT` — must mint Actions runner registration tokens for every listed consumer repo.
+
+To onboard a new app repo: add it to `runners.json` in a PR; merge after the registration job comments success.
+
 Runtime paths on glados:
 
 - `/opt/services/apps/<serviceDir>/compose.yml`

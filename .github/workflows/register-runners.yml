@@ -1,0 +1,188 @@
+# Register repo-scoped glados runners from runners.json
+#
+# On PRs that change runners.json, registers newly added repos on glados.
+# Also supports workflow_dispatch to sync the full list (or specific repos).
+#
+# Prerequisite: this repo (deploy-infra-actions) already has a glados runner
+# (bootstrap once — see runners.json note). Secret RUNNER_ADMIN_PAT must be able
+# to mint registration tokens for each listed consumer repo.
+
+name: Register glados runners
+
+on:
+  pull_request:
+    paths:
+      - "runners.json"
+      - "scripts/runners/**"
+      - ".github/workflows/register-runners.yml"
+  push:
+    branches: [main]
+    paths:
+      - "runners.json"
+      - "scripts/runners/**"
+      - ".github/workflows/register-runners.yml"
+  workflow_dispatch:
+    inputs:
+      repos:
+        description: 'Repos to register (comma-separated owner/name), or "all"'
+        required: false
+        default: "all"
+      force:
+        description: "Re-register even if a runner with that name is already online"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: register-glados-runners
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: plan registrations
+    runs-on: ubuntu-latest
+    outputs:
+      repos_csv: ${{ steps.plan.outputs.repos_csv }}
+      has_repos: ${{ steps.plan.outputs.has_repos }}
+      mode: ${{ steps.plan.outputs.mode }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decide which repos to register
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_REPOS: ${{ github.event.inputs.repos }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          mode="sync"
+          csv=""
+
+          list_csv() {
+            node --input-type=module -e '
+              import fs from "node:fs";
+              const j = JSON.parse(fs.readFileSync("runners.json","utf8"));
+              process.stdout.write(j.repos.map((r) => r.repo).join(","));
+            '
+          }
+
+          if [[ "${EVENT}" == "workflow_dispatch" ]]; then
+            input="${INPUT_REPOS:-all}"
+            if [[ "${input}" == "all" || -z "${input}" ]]; then
+              csv="$(list_csv)"
+              mode="sync-all"
+            else
+              csv="${input}"
+              mode="sync-selected"
+            fi
+          elif [[ "${EVENT}" == "pull_request" ]]; then
+            json="$(node scripts/runners/diff-list.mjs --base "${PR_BASE}" --head "${PR_HEAD}" --json)"
+            echo "diff=${json}"
+            csv="$(node -e 'const j=JSON.parse(process.argv[1]); process.stdout.write((j.added||[]).join(","))' "${json}")"
+            mode="pr-added"
+          else
+            # push to main: register anything newly added vs before SHA
+            before="${BEFORE:-}"
+            if [[ -z "${before}" || "${before}" == "0000000000000000000000000000000000000000" ]]; then
+              csv="$(list_csv)"
+              mode="push-all"
+            else
+              json="$(node scripts/runners/diff-list.mjs --base "${before}" --head "${SHA}" --json)"
+              echo "diff=${json}"
+              csv="$(node -e 'const j=JSON.parse(process.argv[1]); process.stdout.write((j.added||[]).join(","))' "${json}")"
+              mode="push-added"
+            fi
+          fi
+
+          echo "mode=${mode}" >> "$GITHUB_OUTPUT"
+          echo "repos_csv=${csv}" >> "$GITHUB_OUTPUT"
+          if [[ -n "${csv}" ]]; then
+            echo "has_repos=true" >> "$GITHUB_OUTPUT"
+            echo "Will register: ${csv}"
+          else
+            echo "has_repos=false" >> "$GITHUB_OUTPUT"
+            echo "No repos to register."
+          fi
+
+  register:
+    name: register on glados
+    needs: plan
+    if: needs.plan.outputs.has_repos == 'true'
+    runs-on:
+      - self-hosted
+      - glados
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Register runners
+        id: register
+        env:
+          RUNNER_ADMIN_PAT: ${{ secrets.RUNNER_ADMIN_PAT }}
+          GH_TOKEN: ${{ secrets.RUNNER_ADMIN_PAT }}
+          REPOS_CSV: ${{ needs.plan.outputs.repos_csv }}
+          FORCE: ${{ github.event.inputs.force || 'false' }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${RUNNER_ADMIN_PAT}" ]]; then
+            echo "::error::Secret RUNNER_ADMIN_PAT is not set on deploy-infra-actions"
+            echo "Create a classic PAT (or fine-grained token) that can administer"
+            echo "Actions runners on each listed repo, then add it as RUNNER_ADMIN_PAT."
+            exit 1
+          fi
+          extra=()
+          if [[ "${FORCE}" == "true" ]]; then
+            extra+=(--force)
+          fi
+          node scripts/runners/register.mjs \
+            --from-list runners.json \
+            --only "${REPOS_CSV}" \
+            "${extra[@]}"
+
+  comment:
+    name: PR comment
+    needs: [plan, register]
+    if: >
+      always() &&
+      github.event_name == 'pull_request' &&
+      needs.plan.outputs.has_repos == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment registration result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPOS: ${{ needs.plan.outputs.repos_csv }}
+          MODE: ${{ needs.plan.outputs.mode }}
+          RESULT: ${{ needs.register.result }}
+        run: |
+          set -euo pipefail
+          body="## Glados runner registration
+
+          Mode: \`${MODE}\`
+          Repos: \`${REPOS}\`
+          Job: **${RESULT}**
+
+          Repo-scoped runners use labels \`self-hosted\`, \`glados\`.
+          Verify under each repo → Settings → Actions → Runners.
+          "
+          # sticky-ish: update prior bot comment if present
+          marker="<!-- glados-runner-registration -->"
+          existing="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments?per_page=100" \
+            --jq ".[] | select(.body | contains(\"${marker}\")) | .id" | head -1 || true)"
+          payload="$(jq -n --arg body "${marker}
+          ${body}" '{body:$body}')"
+          if [[ -n "${existing}" ]]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" --input - <<<"${payload}"
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --input - <<<"${payload}"
+          fi

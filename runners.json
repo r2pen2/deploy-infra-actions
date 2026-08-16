@@ -1,0 +1,26 @@
+{
+  "labels": ["self-hosted", "glados"],
+  "repos": [
+    {
+      "repo": "r2pen2/deploy-infra-actions",
+      "name": "glados-deploy-infra",
+      "dir": "actions-runner-deploy-infra",
+      "note": "Bootstrap this first so register-runners.yml can run on glados."
+    },
+    {
+      "repo": "r2pen2/WL-Universe",
+      "name": "glados-wl-universe",
+      "dir": "actions-runner-wl-universe"
+    },
+    {
+      "repo": "r2pen2/citrus",
+      "name": "glados-citrus",
+      "dir": "actions-runner-citrus"
+    },
+    {
+      "repo": "r2pen2/nutrifit",
+      "name": "glados-nutrifit",
+      "dir": "actions-runner-nutrifit"
+    }
+  ]
+}
