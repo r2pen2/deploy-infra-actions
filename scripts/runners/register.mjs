@@ -192,8 +192,12 @@ function ensureService(runnerDir) {
   }
 }
 
+function resolveRunnerDir(home, dir) {
+  return path.isAbsolute(dir) ? dir : path.join(home, dir);
+}
+
 function registerOne(entry, { dryRun, force, home }) {
-  const runnerDir = path.join(home, entry.dir);
+  const runnerDir = resolveRunnerDir(home, entry.dir);
   console.log(`\n=== ${entry.repo} → ${entry.name} (${runnerDir}) ===`);
 
   if (!force && alreadyOnline(entry)) {

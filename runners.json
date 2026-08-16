@@ -9,8 +9,8 @@
     },
     {
       "repo": "r2pen2/WL-Universe",
-      "name": "glados-wl-universe",
-      "dir": "actions-runner-wl-universe"
+      "name": "glados",
+      "dir": "/opt/actions-runner"
     },
     {
       "repo": "r2pen2/citrus",
