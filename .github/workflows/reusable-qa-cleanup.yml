@@ -1,0 +1,48 @@
+name: QA cleanup (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      catalog:
+        type: string
+        required: false
+        default: deploy/apps.json
+      firestore-script:
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  cleanup:
+    name: teardown QA on glados
+    runs-on: [self-hosted, glados]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r2pen2/deploy-infra-actions/actions/qa-cleanup@main
+        with:
+          catalog: ${{ inputs.catalog }}
+          pr: ${{ github.event.pull_request.number }}
+          owner: ${{ github.repository_owner }}
+          prune-images: "true"
+          firestore-script: ${{ inputs.firestore-script }}
+
+  comment:
+    name: clear QA comment
+    needs: cleanup
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark torn down
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/r2pen2/deploy-infra-actions.git .deploy-infra
+          node .deploy-infra/scripts/qa/comment-pr.mjs --pr "$PR" --teardown || true

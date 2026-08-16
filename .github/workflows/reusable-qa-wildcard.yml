@@ -1,0 +1,22 @@
+name: QA wildcard bootstrap (reusable)
+
+on:
+  workflow_call:
+    secrets:
+      CLOUDFLARE_API_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure *.joed.dev DNS + tunnel ingress
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/r2pen2/deploy-infra-actions.git .deploy-infra
+          node .deploy-infra/scripts/qa/ensure-qa-wildcard.mjs

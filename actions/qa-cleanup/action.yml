@@ -1,0 +1,51 @@
+name: Cleanup QA preview on glados
+description: Tear down ephemeral QA stacks for a PR
+inputs:
+  catalog:
+    description: Path to deploy/apps.json
+    required: false
+    default: deploy/apps.json
+  pr:
+    description: Pull request number
+    required: true
+  owner:
+    required: false
+    default: ${{ github.repository_owner }}
+  prune-images:
+    required: false
+    default: "true"
+  firestore-script:
+    required: false
+    default: ""
+  working-directory:
+    required: false
+    default: "."
+
+runs:
+  using: composite
+  steps:
+    - name: Cleanup QA stacks
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        PR: ${{ inputs.pr }}
+        OWNER: ${{ inputs.owner }}
+        CATALOG: ${{ inputs.catalog }}
+        PRUNE: ${{ inputs.prune-images }}
+        FIRESTORE: ${{ inputs.firestore-script }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+        SCRIPT="${ACTION_PATH}/../../scripts/qa/cleanup-pr.mjs"
+        extra=()
+        if [[ "${PRUNE}" == "true" ]]; then
+          extra+=(--prune-images)
+        fi
+        if [[ -n "${FIRESTORE}" ]]; then
+          extra+=(--firestore-script "${FIRESTORE}")
+        fi
+        node "${SCRIPT}" \
+          --catalog "${CATALOG}" \
+          --pr "${PR}" \
+          --owner "${OWNER}" \
+          "${extra[@]}"

@@ -1,0 +1,25 @@
+{
+  "imagePrefix": "example",
+  "qaHostDomain": "joed.dev",
+  "apps": [
+    {
+      "app": "web",
+      "port": 80,
+      "kind": "static",
+      "dockerfile": "deploy/docker/Dockerfile",
+      "compose": "deploy/compose/web.yml",
+      "serviceDir": "example-web",
+      "image": true,
+      "host": "example.joed.dev",
+      "watchPaths": [
+        "web/",
+        "deploy/docker/Dockerfile",
+        "deploy/compose/web.yml"
+      ],
+      "imageTagEnv": "EXAMPLE_WEB_IMAGE_TAG",
+      "buildArgs": {
+        "PORT": "80"
+      }
+    }
+  ]
+}

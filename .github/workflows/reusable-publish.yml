@@ -1,0 +1,159 @@
+# Reusable: publish + deploy catalog apps to glados on main.
+# Caller provides deploy/apps.json (+ dockerfiles/compose in their repo).
+name: Publish apps (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      catalog:
+        type: string
+        required: false
+        default: deploy/apps.json
+      apps:
+        description: Override apps (comma-separated or "all"); empty = detect
+        type: string
+        required: false
+        default: ""
+      order:
+        description: Deploy order
+        type: string
+        required: false
+        default: ""
+      plain-docker:
+        type: boolean
+        required: false
+        default: false
+      runner-build:
+        description: Runner labels for build (json array string)
+        type: string
+        required: false
+        default: '["ubuntu-latest"]'
+      runner-deploy:
+        type: string
+        required: false
+        default: '["self-hosted","glados"]'
+    secrets:
+      # optional; GITHUB_TOKEN used by default for GHCR
+      GHCR_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  detect:
+    name: detect changed apps
+    runs-on: ubuntu-latest
+    outputs:
+      apps_csv: ${{ steps.pick.outputs.apps_csv }}
+      build_csv: ${{ steps.pick.outputs.build_csv }}
+      has_apps: ${{ steps.pick.outputs.has_apps }}
+      has_build: ${{ steps.pick.outputs.has_build }}
+      apps: ${{ steps.pick.outputs.apps }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Pick apps
+        id: pick
+        env:
+          INPUT_APPS: ${{ inputs.apps }}
+          CATALOG: ${{ inputs.catalog }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          # Checkout deploy-infra scripts via action path isn't available here;
+          # clone sibling tooling from this repo when called as reusable.
+          # Caller must have the catalog; we use npx-free inline by checking out infra.
+          git clone --depth 1 https://github.com/r2pen2/deploy-infra-actions.git .deploy-infra
+
+          if [[ -n "${INPUT_APPS}" && "${INPUT_APPS}" != "all" ]]; then
+            csv="${INPUT_APPS}"
+          elif [[ "${INPUT_APPS}" == "all" || "${EVENT}" == "workflow_dispatch" && -z "${INPUT_APPS}" ]]; then
+            csv="$(node -e '
+              import("./.deploy-infra/scripts/lib/catalog.mjs").then((m) => {
+                const c = m.loadCatalog(process.env.CATALOG);
+                process.stdout.write(c.publishApps.map((a) => a.app).join(","));
+              })
+            ')"
+          else
+            before="${BEFORE:-}"
+            if [[ -z "${before}" || "${before}" == "0000000000000000000000000000000000000000" ]]; then
+              csv="$(node -e '
+                import("./.deploy-infra/scripts/lib/catalog.mjs").then((m) => {
+                  const c = m.loadCatalog(process.env.CATALOG);
+                  process.stdout.write(c.publishApps.map((a) => a.app).join(","));
+                })
+              ')"
+            else
+              csv="$(node .deploy-infra/scripts/detect-changed-apps.mjs \
+                --catalog "${CATALOG}" --base "${before}" --head "${SHA}" --scope publish \
+                | paste -sd, -)"
+            fi
+          fi
+
+          build_csv="$(CATALOG="${CATALOG}" CSV="${csv}" node -e '
+            import("./.deploy-infra/scripts/lib/catalog.mjs").then((m) => {
+              const c = m.loadCatalog(process.env.CATALOG);
+              const wanted = new Set((process.env.CSV || "").split(",").filter(Boolean));
+              process.stdout.write(c.buildApps.filter((a) => wanted.has(a.app)).map((a) => a.app).join(","));
+            })
+          ')"
+          apps="$(node -e 'process.stdout.write(JSON.stringify((process.env.CSV||"").split(",").filter(Boolean)))' )"
+          echo "apps_csv=${csv}" >> "$GITHUB_OUTPUT"
+          echo "build_csv=${build_csv}" >> "$GITHUB_OUTPUT"
+          echo "apps=${apps}" >> "$GITHUB_OUTPUT"
+          if [[ -n "${csv}" ]]; then echo "has_apps=true" >> "$GITHUB_OUTPUT"; else echo "has_apps=false" >> "$GITHUB_OUTPUT"; fi
+          if [[ -n "${build_csv}" ]]; then echo "has_build=true" >> "$GITHUB_OUTPUT"; else echo "has_build=false" >> "$GITHUB_OUTPUT"; fi
+          echo "Deploy: ${csv:-none}"
+          echo "Build: ${build_csv:-none}"
+
+  publish:
+    name: build & push
+    needs: detect
+    if: needs.detect.outputs.has_build == 'true'
+    runs-on: ${{ fromJSON(inputs.runner-build) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+        if: ${{ !inputs.plain-docker }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: r2pen2/deploy-infra-actions/actions/build-push@main
+        with:
+          catalog: ${{ inputs.catalog }}
+          apps: ${{ needs.detect.outputs.build_csv }}
+          owner: ${{ github.repository_owner }}
+          sha: ${{ github.sha }}
+          plain-docker: ${{ inputs.plain-docker && 'true' || 'false' }}
+
+  deploy:
+    name: deploy on glados
+    needs: [detect, publish]
+    if: |
+      always() &&
+      needs.detect.outputs.has_apps == 'true' &&
+      (needs.publish.result == 'success' || needs.publish.result == 'skipped')
+    runs-on: ${{ fromJSON(inputs.runner-deploy) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy
+        uses: r2pen2/deploy-infra-actions/actions/deploy-prod@main
+        with:
+          catalog: ${{ inputs.catalog }}
+          apps: ${{ needs.detect.outputs.apps_csv }}
+          sha: ${{ github.sha }}
+          order: ${{ inputs.order }}

@@ -1,0 +1,69 @@
+name: Deploy QA preview on glados
+description: Deploy ephemeral pr-N-app.joed.dev stacks from a catalog
+inputs:
+  catalog:
+    description: Path to deploy/apps.json
+    required: false
+    default: deploy/apps.json
+  apps:
+    description: Comma-separated app names
+    required: true
+  pr:
+    description: Pull request number
+    required: true
+  sha:
+    description: Git SHA
+    required: false
+    default: ""
+  owner:
+    description: GHCR owner
+    required: false
+    default: ${{ github.repository_owner }}
+  firestore-script:
+    description: Optional relative path to firestore-qa.mjs in caller repo
+    required: false
+    default: ""
+  working-directory:
+    required: false
+    default: "."
+outputs:
+  deployments:
+    description: JSON array of {app,url,...}
+    value: ${{ steps.deploy.outputs.deployments }}
+
+runs:
+  using: composite
+  steps:
+    - name: Deploy QA stacks
+      id: deploy
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        APPS: ${{ inputs.apps }}
+        PR: ${{ inputs.pr }}
+        SHA: ${{ inputs.sha }}
+        OWNER: ${{ inputs.owner }}
+        CATALOG: ${{ inputs.catalog }}
+        FIRESTORE: ${{ inputs.firestore-script }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+        SCRIPT="${ACTION_PATH}/../../scripts/qa/deploy-pr.mjs"
+        out="/tmp/qa-deployments-${PR}.json"
+        extra=()
+        if [[ -n "${FIRESTORE}" ]]; then
+          extra+=(--firestore-script "${FIRESTORE}")
+        fi
+        node "${SCRIPT}" \
+          --catalog "${CATALOG}" \
+          --pr "${PR}" \
+          --apps "${APPS}" \
+          --sha "${SHA}" \
+          --owner "${OWNER}" \
+          --out "${out}" \
+          "${extra[@]}"
+        {
+          echo "deployments<<EOF"
+          cat "${out}"
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"

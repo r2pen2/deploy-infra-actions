@@ -1,0 +1,47 @@
+name: Deploy prod compose on glados
+description: Copy compose templates into /opt/services/apps and docker compose up -d
+inputs:
+  catalog:
+    description: Path to deploy/apps.json in the caller repo
+    required: false
+    default: deploy/apps.json
+  apps:
+    description: Comma-separated app names to deploy
+    required: true
+  sha:
+    description: Git SHA (for image tag env vars)
+    required: false
+    default: ""
+  order:
+    description: Optional deploy order (comma-separated)
+    required: false
+    default: ""
+  working-directory:
+    description: Caller repo root
+    required: false
+    default: "."
+
+runs:
+  using: composite
+  steps:
+    - name: Deploy compose stacks
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        APPS: ${{ inputs.apps }}
+        SHA: ${{ inputs.sha }}
+        CATALOG: ${{ inputs.catalog }}
+        ORDER: ${{ inputs.order }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+        SCRIPT="${ACTION_PATH}/../../scripts/deploy-prod.mjs"
+        extra=()
+        if [[ -n "${ORDER}" ]]; then
+          extra+=(--order "${ORDER}")
+        fi
+        node "${SCRIPT}" \
+          --catalog "${CATALOG}" \
+          --apps "${APPS}" \
+          --sha "${SHA}" \
+          "${extra[@]}"
