@@ -157,3 +157,5 @@ jobs:
           apps: ${{ needs.detect.outputs.apps_csv }}
           sha: ${{ github.sha }}
           order: ${{ inputs.order }}
+          ghcr-user: ${{ github.repository_owner }}
+          ghcr-token: ${{ secrets.GHCR_TOKEN || github.token }}
