@@ -1,0 +1,26 @@
+name: Sync labels (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      config:
+        type: string
+        required: false
+        default: ""
+      prune:
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  issues: write
+
+jobs:
+  sync:
+    name: sync labels
+    runs-on: ubuntu-latest
+    steps:
+      - uses: r2pen2/deploy-infra-actions/actions/sync-labels@main
+        with:
+          config: ${{ inputs.config }}
+          prune: ${{ inputs.prune }}

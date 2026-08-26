@@ -52,6 +52,30 @@ jobs:
     secrets: inherit
 ```
 
+## Labels
+
+Canonical label set lives here as [`labels.json`](./labels.json) — one source
+of truth, applied to consumer repos via a reusable workflow. No PAT needed:
+the caller's own `GITHUB_TOKEN` is used, scoped to the caller repo.
+
+```yaml
+# .github/workflows/labels.yml
+name: Sync labels
+on:
+  workflow_dispatch:
+
+jobs:
+  labels:
+    permissions:
+      issues: write
+    uses: r2pen2/deploy-infra-actions/.github/workflows/reusable-sync-labels.yml@main
+```
+
+Sync is fully declarative and prunes by default: labels not in `labels.json`
+are deleted from the consumer repo. Pass `with: { prune: false }` to only
+add/update instead. To change the label set for everyone, edit `labels.json`
+here and re-run the workflow (`workflow_dispatch`) on each consumer repo.
+
 ## Catalog (`deploy/apps.json`)
 
 ```json
@@ -88,6 +112,7 @@ QA URLs: `https://pr-<n>-<app>.joed.dev`
 | `actions/deploy-prod` | glados: copy compose + `up -d` |
 | `actions/qa-deploy` | glados: ephemeral Traefik Host stacks |
 | `actions/qa-cleanup` | glados: tear down PR stacks |
+| `actions/sync-labels` | Sync a repo's issue labels to `labels.json` |
 
 Example (monorepo with custom build still OK):
 

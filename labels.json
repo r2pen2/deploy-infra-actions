@@ -1,0 +1,15 @@
+{
+  "labels": [
+    { "name": "Backend", "color": "e4e669", "description": "Backend changes" },
+    { "name": "Blocked", "color": "000000", "description": "This issue is blocked by another one" },
+    { "name": "Blocker", "color": "ff0000", "description": "This issue is blocking one or more other issues" },
+    { "name": "Bug", "color": "d73a4a", "description": "Something isn't working" },
+    { "name": "Burndown", "color": "D93F0B", "description": "This has to get done!" },
+    { "name": "Documentation", "color": "0075ca", "description": "Improvements or additions to documentation" },
+    { "name": "In Progress", "color": "008672", "description": "I'm working on this!" },
+    { "name": "New Feature", "color": "FEF2C0", "description": "New feature or request" },
+    { "name": "Refactor", "color": "7057ff", "description": "Refactor request" },
+    { "name": "Testing", "color": "0E8A16", "description": "Write a test or fix a test" },
+    { "name": "UI/UX", "color": "d876e3", "description": "Front-facing changes" }
+  ]
+}
