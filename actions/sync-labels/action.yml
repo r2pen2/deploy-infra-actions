@@ -1,0 +1,41 @@
+name: Sync labels
+description: Sync a repo's issue labels to the shared joed.dev label set
+inputs:
+  config:
+    description: Path to a labels.json to sync from (defaults to the canonical set in this repo)
+    required: false
+    default: ""
+  repo:
+    description: Repo to sync (owner/name)
+    required: false
+    default: ${{ github.repository }}
+  prune:
+    description: Delete labels on the repo that aren't in the config
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Sync labels
+      shell: bash
+      env:
+        REPO: ${{ inputs.repo }}
+        CONFIG: ${{ inputs.config }}
+        PRUNE: ${{ inputs.prune }}
+        ACTION_PATH: ${{ github.action_path }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        CONFIG_PATH="${CONFIG}"
+        if [[ -z "${CONFIG_PATH}" ]]; then
+          CONFIG_PATH="${ACTION_PATH}/../../labels.json"
+        fi
+        extra=()
+        if [[ "${PRUNE}" != "true" ]]; then
+          extra+=(--no-prune)
+        fi
+        node "${ACTION_PATH}/../../scripts/labels/sync-labels.mjs" \
+          --repo "${REPO}" \
+          --config "${CONFIG_PATH}" \
+          "${extra[@]}"
