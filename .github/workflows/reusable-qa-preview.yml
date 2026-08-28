@@ -83,11 +83,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+      - name: Log into ghcr.io as root
+        # deploy-pr.mjs shells out through `sudo docker ...` for every compose
+        # command on this self-hosted runner, so the credential store that
+        # matters is root's, not the runner user's (docker/login-action logs
+        # in as the latter, which the later `sudo docker compose pull` can't
+        # see, leaving it "denied").
+        env:
+          GHCR_PASSWORD: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+        run: echo "${GHCR_PASSWORD}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - id: deploy
         uses: r2pen2/deploy-infra-actions/actions/qa-deploy@main
