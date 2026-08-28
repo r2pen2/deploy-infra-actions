@@ -66,7 +66,7 @@ runs:
         build_csv="$(
           CATALOG="${CATALOG}" CSV="${csv}" LIB="${LIB}" node --input-type=module -e "
             import { pathToFileURL } from 'node:url';
-            import { loadCatalog } from pathToFileURL(process.env.LIB).href;
+            const { loadCatalog } = await import(pathToFileURL(process.env.LIB).href);
             const c = loadCatalog(process.env.CATALOG);
             const wanted = new Set((process.env.CSV || '').split(',').filter(Boolean));
             process.stdout.write(c.buildApps.filter((a) => wanted.has(a.app)).map((a) => a.app).join(','));
