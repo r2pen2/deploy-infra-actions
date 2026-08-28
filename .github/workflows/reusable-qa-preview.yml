@@ -83,6 +83,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+
       - id: deploy
         uses: r2pen2/deploy-infra-actions/actions/qa-deploy@main
         with:
