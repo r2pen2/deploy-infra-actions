@@ -26,6 +26,11 @@
       "repo": "r2pen2/fit",
       "name": "glados-fit",
       "dir": "actions-runner-fit"
+    },
+    {
+      "repo": "r2pen2/home-assistant-config",
+      "name": "glados-home-assistant-config",
+      "dir": "actions-runner-home-assistant-config"
     }
   ]
 }
