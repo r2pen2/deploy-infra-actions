@@ -39,6 +39,11 @@
       "repo": "r2pen2/catchat",
       "name": "glados-catchat",
       "dir": "actions-runner-catchat"
+    },
+    {
+      "repo": "r2pen2/speaker",
+      "name": "glados-speaker",
+      "dir": "actions-runner-speaker"
     }
   ]
 }
