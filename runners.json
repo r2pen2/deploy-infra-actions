@@ -44,6 +44,11 @@
       "repo": "r2pen2/speaker",
       "name": "glados-speaker",
       "dir": "actions-runner-speaker"
+    },
+    {
+      "repo": "r2pen2/access",
+      "name": "glados-access",
+      "dir": "actions-runner-access"
     }
   ]
 }
