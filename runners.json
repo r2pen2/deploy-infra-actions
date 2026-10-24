@@ -54,6 +54,11 @@
       "repo": "r2pen2/bindarr",
       "name": "glados-bindarr",
       "dir": "actions-runner-bindarr"
+    },
+    {
+      "repo": "r2pen2/devops",
+      "name": "glados-devops",
+      "dir": "actions-runner-devops"
     }
   ]
 }
