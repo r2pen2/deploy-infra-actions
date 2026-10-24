@@ -49,6 +49,11 @@
       "repo": "r2pen2/access",
       "name": "glados-access",
       "dir": "actions-runner-access"
+    },
+    {
+      "repo": "r2pen2/bindarr",
+      "name": "glados-bindarr",
+      "dir": "actions-runner-bindarr"
     }
   ]
 }
